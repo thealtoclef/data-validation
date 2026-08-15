@@ -29,6 +29,27 @@ from third_party.ibis.ibis_cloud_spanner.compiler import SpannerCompiler
 from third_party.ibis.ibis_cloud_spanner.client import SpannerCursor
 from third_party.ibis.ibis_cloud_spanner.to_pandas import pandas_df
 
+# Aggregate functions DVT uses for column validation. When the compiled SQL
+# contains one of these (or a GROUP BY) it is not root-partitionable in Spanner
+# and must use the default snapshot path; the Data Boost partitioned path only
+# applies to row-validation scans.
+_AGGREGATE_SQL_RE = re.compile(
+    r"\b(count|sum|avg|min|max|bit_xor|stddev|var_samp|var_pop|"
+    r"approx_count_distinct)\s*\(",
+    re.IGNORECASE,
+)
+
+
+def _is_aggregate_sql(sql):
+    """Return True if compiled SQL is a column-validation aggregate.
+
+    Used to pre-select the execution route: aggregates always use the default
+    snapshot path; only non-aggregate (row-scan) SQL is eligible for the
+    Data Boost partitioned path when ``use_databoost`` is enabled.
+    """
+    s = sql.lower()
+    return "group by" in s or bool(_AGGREGATE_SQL_RE.search(s))
+
 
 class Backend(BaseSQLBackend):
     name = "spanner"
@@ -41,6 +62,7 @@ class Backend(BaseSQLBackend):
         project_id: str = None,
         credentials=None,
         api_endpoint: str = None,
+        use_databoost: bool = False,
     ) -> None:
 
         options = None
@@ -56,6 +78,13 @@ class Backend(BaseSQLBackend):
             self.data_instance,
             self.dataset,
         ) = parse_instance_and_dataset(instance_id, database_id)
+        # When True, execute()/_execute() route eligible SQL through Spanner
+        # Data Boost via the partitioned-query path (to_pandas_databoost).
+        # Requires partitionable queries + spanner.databases.useDataBoost IAM.
+        # Coerce string forms ("false","0","no"...) from CLI/YAML to real bool.
+        if isinstance(use_databoost, str):
+            use_databoost = use_databoost.strip().lower() in ("true", "1", "yes", "on")
+        self.use_databoost = bool(use_databoost)
 
     def _parse_instance_and_dataset(self, dataset):
         if not dataset and not self.dataset:
@@ -166,16 +195,27 @@ class Backend(BaseSQLBackend):
         self._register_in_memory_tables(expr)
         db = self.instance.database(self.dataset_id)
 
-        with db.snapshot() as snapshot:
-            result = pandas_df.to_pandas(snapshot, sql, query_parameters=None)
+        # Pre-select the route: Data Boost (partitioned path) only for
+        # non-aggregate SQL (row validation). Aggregations (column validation)
+        # always use the default snapshot path - they are not root-partitionable.
+        if getattr(self, "use_databoost", False) and not _is_aggregate_sql(sql):
+            result = pandas_df.to_pandas_databoost(db, sql, query_parameters=None)
+        else:
+            with db.snapshot() as snapshot:
+                result = pandas_df.to_pandas(snapshot, sql, query_parameters=None)
 
         return result
 
     def _execute(self, stmt, results=True, query_parameters=None):
         db = self.instance.database(self.dataset_id)
 
-        with db.snapshot() as snapshot:
-            data_qry = pandas_df.to_pandas(snapshot, stmt, query_parameters)
+        # Same route pre-selection as execute(): partitioned path only for
+        # non-aggregate SQL when use_databoost is enabled.
+        if getattr(self, "use_databoost", False) and not _is_aggregate_sql(stmt):
+            data_qry = pandas_df.to_pandas_databoost(db, stmt, query_parameters)
+        else:
+            with db.snapshot() as snapshot:
+                data_qry = pandas_df.to_pandas(snapshot, stmt, query_parameters)
         return data_qry
 
     def raw_sql(self, query: str, results=False, params=None):

@@ -165,6 +165,10 @@ CONNECTION_SOURCE_FIELDS = {
             "api_endpoint",
             '(Optional) GCP Spanner API endpoint (e.g. "https://spanner-mypsc.p.googleapis.com")',
         ],
+        [
+            "use_databoost",
+            "Route eligible Spanner queries through Data Boost (ROW VALIDATION ONLY; column validation queries are not root-partitionable; needs spanner.databases.useDataBoost IAM)",
+        ],
     ],
     consts.SOURCE_TYPE_SYBASE: [
         ["host", "Sybase host (default localhost)"],
@@ -228,6 +232,22 @@ CONNECTION_SOURCE_FIELDS = {
         ["url", "URL link in Db2 to connect to"],
         ["driver", "Driver link in Db2 to connect to (default ibm_db_sa)"],
         ["connect_args", "(Optional) Additional connection argument mapping"],
+    ],
+    consts.SOURCE_TYPE_CLOUDSQL_POSTGRES: [
+        ["instance_connection_name", "Cloud SQL instance connection name (project:region:instance)"],
+        ["database", "Database to connect to"],
+        ["user", "Database user (or IAM principal email when enable_iam_auth=true)"],
+        ["password", "Password for supplied user (omit for IAM auth)"],
+        ["ip_type", "IP type: public, private, or psc (default public)"],
+        ["enable_iam_auth", "Use IAM database authentication (default False)"],
+    ],
+    consts.SOURCE_TYPE_CLOUDSQL_MYSQL: [
+        ["instance_connection_name", "Cloud SQL instance connection name (project:region:instance)"],
+        ["database", "Database to connect to"],
+        ["user", "Database user (or IAM principal email when enable_iam_auth=true)"],
+        ["password", "Password for supplied user (omit for IAM auth)"],
+        ["ip_type", "IP type: public, private, or psc (default public)"],
+        ["enable_iam_auth", "Use IAM database authentication (default False)"],
     ],
 }
 

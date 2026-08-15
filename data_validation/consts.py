@@ -144,6 +144,8 @@ SOURCE_TYPE_SNOWFLAKE = "Snowflake"
 SOURCE_TYPE_SPANNER = "Spanner"
 SOURCE_TYPE_SYBASE = "Sybase"
 SOURCE_TYPE_TERADATA = "Teradata"
+SOURCE_TYPE_CLOUDSQL_POSTGRES = "CloudSQLPostgres"
+SOURCE_TYPE_CLOUDSQL_MYSQL = "CloudSQLMySQL"
 
 # BigQuery Result Handler Configs
 RH_TYPE = "type"
@@ -157,6 +159,9 @@ API_ENDPOINT = "api_endpoint"
 STORAGE_API_ENDPOINT = "storage_api_endpoint"
 CLIENT_PROJECT_ID = "client_project_id"
 BILLING_PROJECT_ID = "billing_project_id"
+
+# Spanner connection attributes
+USE_DATABOOST = "use_databoost"
 
 # Result Handler Output Table Fields
 VALIDATION_TYPE = "validation_type"
