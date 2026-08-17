@@ -169,6 +169,78 @@ data-validation connections add
 
 * roles/spanner.databaseReader
 
+## ChunkHash validation
+
+`validate chunk-hash` is a pushdown table diff (fork feature, see
+`docs/adr/0003`): it proves two tables equal by comparing per-segment bucket
+checksums computed entirely inside the databases, and only downloads rows for
+segments that mismatch. The container never holds more than one segment's worth
+of rows, so identical tables transfer only a few integers per chunk.
+
+**Supported dialects (Tier-1, enforced at run start):** BigQuery, Spanner,
+Postgres, MySQL. Cloud SQL variants and other engines (MSSQL, Oracle, …) are
+out of scope and rejected. Execution strategy is chosen per side — BigQuery
+expands ranges with one `GROUP BY (CASE …)` query, row stores
+(Spanner/Postgres/MySQL) use per-range keyset queries; the two sides may use
+different strategies in the same run.
+
+**PostgreSQL requirement:** the `pgcrypto` extension is needed for
+`DIGEST()`/`ENCODE()`. Create it once per database:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+```
+
+### Usage
+
+```
+data-validation validate chunk-hash
+    --source-conn SOURCE_CONN         Source connection name
+    --target-conn TARGET_CONN         Target connection name
+    --tables-list 'schema.table=target_schema.target_table'
+                                      Comma separated 'source=target' table map
+    --primary-keys col_a,col_b        Primary key columns; ranges cut on the first
+    [--comparison-columns -cc]        Columns hashed into the row checksum
+    [--bisection-factor 32]           Key-range segments per bisection level
+    [--num-buckets 16]                Intra-segment hash buckets
+    [--bisection-threshold 16000]     Row count at/under which a mismatching
+                                      segment is downloaded and diffed locally
+    [--max-depth 8]                   Bisection recursion cap
+    [--max-diff-rows 100000]          Total downloaded-row budget; exceeding it
+                                      stops the run with status budget_exceeded
+    [--max-parallelism 4]             Worker threads for independent top-level
+                                      queries and subranges; 1 disables
+                                      parallelism (serial execution)
+```
+
+Example (BigQuery source, Spanner target):
+
+```
+data-validation validate chunk-hash \
+  -sc bq_conn -tc sp_conn \
+  -tbls 'my_project.my_dataset.farmers=Farmers' \
+  -pk FarmerId \
+  -cc FirstName,LastName,Email
+```
+
+Notes:
+- `-cc` defaults to all source columns except the primary keys; the spike scope
+  (Phase 0, ADR-0003) proves STRING/INT64 columns. Timestamp/bool/float
+  normalization is Phase 4 — pass `-cc` explicitly with those columns until then.
+- BigQuery must be the SOURCE when the target is schema-less Spanner (DVT's
+  table parser requires a source schema).
+- A fully qualified `project.dataset.table` source reference works: the query
+  runs in the connection's project while reading the table in `project`.
+- `-cc` columns are cast to STRING and `|`-joined before hashing; Spanner's
+  keyset ranges compare STRING keys lexicographically, so Postgres targets need
+  `COLLATE "C"` on key columns to match byte-wise ordering.
+- Results use DVT's standard result schema plus `chunk_start`, `chunk_end`, and
+  `differing_keys` (the sampled differing primary keys per chunk).
+- Top-level queries and subranges run in parallel (default 4 threads) when
+  `--max-parallelism > 1`; recursion within a subrange stays serial, and result
+  rows are always emitted in chunk order regardless of parallelism. The
+  `max_diff_rows` budget is enforced atomically across concurrent downloads.
+
 ## Teradata
 
 Please note that Teradata is not-native to this package and must be installed

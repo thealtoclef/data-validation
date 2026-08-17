@@ -22,7 +22,14 @@ from typing import TYPE_CHECKING
 import ibis
 import pandas
 
-from data_validation import combiner, consts, metadata, util
+from data_validation import (
+    chunk_hash_validation,
+    clients,
+    combiner,
+    consts,
+    metadata,
+    util,
+)
 from data_validation.config_manager import ConfigManager
 from data_validation.query_builder.query_builder import FilterField
 from data_validation.query_builder.random_row_builder import RandomRowBuilder
@@ -84,10 +91,13 @@ class DataValidation(object):
         # Use a generated uuid for the run_id if None was supplied via config
         self.run_metadata.run_id = self.config_manager.run_id or str(uuid.uuid4())
 
-        # Initialize Validation Builder if None was supplied
-        self.validation_builder = validation_builder or ValidationBuilder(
-            self.config_manager
-        )
+        # Initialize Validation Builder if None was supplied. Not needed for
+        # ChunkHash validation, which builds its own pushdown queries.
+        self.validation_builder = validation_builder
+        if self.validation_builder is None and (
+            self.config_manager.validation_type != consts.CHUNK_HASH_VALIDATION
+        ):
+            self.validation_builder = ValidationBuilder(self.config_manager)
 
         self.schema_validator = schema_validator or SchemaValidation(
             self.config_manager, run_metadata=self.run_metadata, verbose=self.verbose
@@ -122,11 +132,83 @@ class DataValidation(object):
             result_df = util.timed_call(
                 "Schema validation", self.schema_validator.execute
             )
+        elif self.config_manager.validation_type == consts.CHUNK_HASH_VALIDATION:
+            """Perform chunk-hash pushdown diff validation"""
+            result_df = util.timed_call(
+                "ChunkHash validation", self._execute_chunk_hash_validation
+            )
         else:
             result_df = self._execute_validation(self.validation_builder)
 
         # Call Result Handler to Manage Results
         return self.result_handler.execute(result_df)
+
+    def _execute_chunk_hash_validation(self):
+        """Run the chunk-hash pushdown diff and return the result DataFrame."""
+        config_manager = self.config_manager
+        settings = config_manager.chunk_hash_settings
+        primary_keys = config_manager.primary_keys
+        if not primary_keys:
+            raise ValueError("Primary keys are required for ChunkHash validation")
+
+        source_client = config_manager.source_client
+        target_client = config_manager.target_client
+
+        def _table_ref(client, schema, table):
+            # Schema-less engines (Spanner) address tables by name only; the
+            # schema may have been auto-inherited from the other side by the
+            # tables-list parser and must be dropped.
+            if getattr(client, "name", "") == "spanner":
+                return table
+            return f"{schema}.{table}" if schema else table
+
+        source_table = _table_ref(
+            source_client, config_manager.source_schema, config_manager.source_table
+        )
+        target_table = _table_ref(
+            target_client, config_manager.target_schema, config_manager.target_table
+        )
+
+        comparison_columns = settings.get("comparison_columns") or []
+        if not comparison_columns:
+            # Default: all source columns except the primary keys.
+            table = clients.get_ibis_table(
+                source_client,
+                config_manager.source_schema,
+                config_manager.source_table,
+            )
+            comparison_columns = [
+                col for col in table.columns if col not in primary_keys
+            ]
+            logging.info(
+                "ChunkHash comparison columns (defaulted): %s", comparison_columns
+            )
+
+        chunk_config = chunk_hash_validation.ChunkHashConfig(
+            primary_keys=primary_keys,
+            comparison_columns=comparison_columns,
+            bisection_factor=settings.get("bisection_factor", 32),
+            num_buckets=settings.get("num_buckets", 16),
+            bisection_threshold=settings.get("bisection_threshold", 16000),
+            max_depth=settings.get("max_depth", 8),
+            max_diff_rows=settings.get("max_diff_rows", 100000),
+            max_parallelism=settings.get("max_parallelism", 4),
+        )
+        return chunk_hash_validation.run_chunk_hash_validation(
+            source_client,
+            target_client,
+            chunk_config,
+            self.run_metadata.run_id,
+            source_table,
+            target_table,
+            labels=self.run_metadata.labels,
+            source_executor=chunk_hash_validation.client_dataframe_executor(
+                source_client
+            ),
+            target_executor=chunk_hash_validation.client_dataframe_executor(
+                target_client
+            ),
+        )
 
     def _add_random_row_filter(self):
         """Add random row filters to the validation builder."""

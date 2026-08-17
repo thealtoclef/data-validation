@@ -275,6 +275,23 @@ def build_config_from_args(args: "Namespace", config_manager: ConfigManager):
             )
         config_manager.append_allow_list(args.allow_list, args.allow_list_file)
 
+    # Append CHUNK_HASH_VALIDATION configs (pushdown diff)
+    if config_manager.validation_type == consts.CHUNK_HASH_VALIDATION:
+        config_manager.append_chunk_hash_settings(
+            primary_keys=cli_tools.get_arg_list(args.primary_keys),
+            comparison_columns=(
+                cli_tools.get_arg_list(args.comparison_columns)
+                if args.comparison_columns
+                else []
+            ),
+            bisection_factor=args.bisection_factor,
+            num_buckets=args.num_buckets,
+            bisection_threshold=args.bisection_threshold,
+            max_depth=args.max_depth,
+            max_diff_rows=args.max_diff_rows,
+            max_parallelism=args.max_parallelism,
+        )
+
     # Append configs specific to CUSTOM_QUERY (i.e. query strings or strings from files)
     if config_manager.validation_type == consts.CUSTOM_QUERY:
         config_manager.append_custom_query_type(args.custom_query_type)
@@ -736,7 +753,7 @@ def run_validation_configs(args):
 
 def validate(args):
     """Run commands related to data validation."""
-    if args.validate_cmd in ["column", "row", "schema", "custom-query"]:
+    if args.validate_cmd in ["column", "row", "schema", "custom-query", "chunk-hash"]:
         run(args)
     else:
         raise ValueError(f"Validation Argument '{args.validate_cmd}' is not supported")

@@ -135,6 +135,26 @@ class RawSQL(ops.Comparison):
     pass
 
 
+class HashSum(ops.Reduction):
+    """Sum of a per-row hash truncated to its last 15 hex chars (60 bits).
+
+    The argument is a per-row hash expression that is a 64-character
+    lowercase/uppercase-hex STRING (e.g. the output of SHA256 as hex). The
+    result is the sum of the last 15 hex characters interpreted as an exact
+    integer (60 bits of the hash), with an empty input set summing to 0.
+
+    CRITICAL: the compiled SQL MUST use SUBSTR(<h>, 50) -- a POSITIVE position
+    (position 50 = last 15 chars of a 64-char sha256 hex string). A NEGATIVE
+    offset (e.g. substr(h, -15)) returns the whole string in PostgreSQL,
+    causing silent checksum divergence across dialects (verified by live spike;
+    see ADR-0003). Do NOT "simplify" to a negative offset.
+    """
+
+    arg: ops.Value[Union[dt.String, dt.Binary]]
+
+    dtype = dt.Decimal(65, 0)
+
+
 def compile_binary_length(binary_value):
     return BinaryLength(binary_value).to_expr()
 
@@ -197,9 +217,29 @@ def format_hashbytes_base(translator, op):
     return f"sha2({arg}, 256)"
 
 
+def format_hash_sum_zetasql(translator, op):
+    """BigQuery / Cloud Spanner (ZetaSQL) segment checksum.
+
+    CRITICAL: SUBSTR(<h>, 50) must use a POSITIVE position -- position 50 is
+    the last 15 chars of a 64-char sha256 hex string. A NEGATIVE offset (e.g.
+    substr(h, -15)) returns the whole string in PostgreSQL, causing silent
+    checksum divergence across dialects (verified by live spike; see ADR-0003).
+    Do NOT "simplify" to a negative offset.
+    """
+    arg = translator.translate(op.arg)
+    return (
+        "COALESCE(SUM(CAST(CAST(CONCAT('0x', SUBSTR("
+        f"{arg}, 50)) AS INT64) AS NUMERIC)), 0)"
+    )
+
+
 def compile_raw_sql(table, sql):
     op = RawSQL(table[table.columns[0]].cast(dt.string), ibis.literal(sql))
     return op.to_expr()
+
+
+def compile_hash_sum(hash_value):
+    return HashSum(hash_value).to_expr()
 
 
 def format_raw_sql(translator, op):
@@ -221,6 +261,36 @@ def sa_format_hashbytes_mysql(translator, op):
 def sa_format_hashbytes_redshift(translator, op):
     arg = translator.translate(op.arg)
     return sa.sql.literal_column(f"sha2({arg}, 256)")
+
+
+def sa_format_hash_sum_postgres(translator, op):
+    """PostgreSQL segment checksum.
+
+    CRITICAL: SUBSTR(<h>, 50) must use a POSITIVE position -- position 50 is
+    the last 15 chars of a 64-char sha256 hex string. A NEGATIVE offset (e.g.
+    substr(h, -15)) returns the whole string in PostgreSQL, causing silent
+    checksum divergence across dialects (verified by live spike; see ADR-0003).
+    Do NOT "simplify" to a negative offset.
+    """
+    arg = translator.translate(op.arg)
+    return sa.sql.literal_column(
+        f"COALESCE(SUM(('x' || SUBSTR({arg}, 50))::bit(60)::bigint), 0)"
+    )
+
+
+def sa_format_hash_sum_mysql(translator, op):
+    """MySQL segment checksum.
+
+    CRITICAL: SUBSTR(<h>, 50) must use a POSITIVE position -- position 50 is
+    the last 15 chars of a 64-char sha256 hex string. A NEGATIVE offset (e.g.
+    substr(h, -15)) returns the whole string in PostgreSQL, causing silent
+    checksum divergence across dialects (verified by live spike; see ADR-0003).
+    Do NOT "simplify" to a negative offset.
+    """
+    arg = translator.translate(op.arg)
+    return sa.sql.literal_column(
+        f"COALESCE(SUM(CAST(CONV(SUBSTR({arg}, 50), 16, 10) AS DECIMAL(65, 0))), 0)"
+    )
 
 
 def sa_format_to_char(translator, op):
@@ -347,6 +417,7 @@ BigQueryExprTranslator._registry[BinaryLength] = bigquery_registry.format_binary
 BigQueryExprTranslator._registry[ops.ExtractEpochSeconds] = (
     bigquery_registry.extract_epoch_seconds
 )
+BigQueryExprTranslator._registry[HashSum] = format_hash_sum_zetasql
 
 AlchemyExprTranslator._registry[RawSQL] = format_raw_sql
 AlchemyExprTranslator._registry[ops.HashBytes] = format_hashbytes_alchemy
@@ -388,6 +459,7 @@ PostgreSQLExprTranslator._registry[ops.ExtractEpochSeconds] = (
 PostgreSQLExprTranslator._registry[PaddedCharLength] = (
     postgres_registry.sa_format_postgres_padded_char_length
 )
+PostgreSQLExprTranslator._registry[HashSum] = sa_format_hash_sum_postgres
 
 
 MsSqlExprTranslator._registry[ops.HashBytes] = mssql_registry.sa_format_hashbytes
@@ -412,6 +484,7 @@ MySQLExprTranslator._registry[RawSQL] = sa_format_raw_sql
 MySQLExprTranslator._registry[ops.HashBytes] = sa_format_hashbytes_mysql
 MySQLExprTranslator._registry[ops.Strftime] = strftime_mysql
 MySQLExprTranslator._registry[BinaryLength] = sa_format_binary_length
+MySQLExprTranslator._registry[HashSum] = sa_format_hash_sum_mysql
 
 RedShiftExprTranslator._registry[ops.HashBytes] = sa_format_hashbytes_redshift
 RedShiftExprTranslator._registry[RawSQL] = sa_format_raw_sql
@@ -438,6 +511,7 @@ if Db2zOSExprTranslator:
 SpannerExprTranslator._registry[RawSQL] = format_raw_sql
 SpannerExprTranslator._registry[ops.HashBytes] = bigquery_registry.format_hashbytes
 SpannerExprTranslator._registry[BinaryLength] = fixed_arity("length", 1)
+SpannerExprTranslator._registry[HashSum] = format_hash_sum_zetasql
 
 if TeradataExprTranslator:
     TeradataExprTranslator._registry[RawSQL] = format_raw_sql
@@ -470,3 +544,13 @@ if SybaseExprTranslator:
     )
     SybaseExprTranslator._registry[ops.Mean] = mssql_registry.sa_format_mean
     SybaseExprTranslator._registry[ops.Sum] = mssql_registry.sa_format_sum
+
+
+# Shared position constant for the hash-int truncation used by ChunkHash
+# validation: the first of the last 15 hex chars of a 64-char sha256 hex
+# string (64 - 15 + 1 = 50). A POSITIVE position is load-bearing -- PostgreSQL
+# substr() with a negative start returns the whole string, silently breaking
+# cross-dialect checksum equality (verified by live spike; ADR-0003).
+# Imported by data_validation.chunk_hash_validation so the raw-SQL builders
+# and the ibis compile rules share one source of truth.
+HASH_SUM_SUBSTR_POSITION = 50

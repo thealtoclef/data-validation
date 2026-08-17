@@ -110,6 +110,7 @@ GROUPED_COLUMN_VALIDATION = "GroupedColumn"
 ROW_VALIDATION = "Row"
 SCHEMA_VALIDATION = "Schema"
 CUSTOM_QUERY = "Custom-query"
+CHUNK_HASH_VALIDATION = "ChunkHash"
 
 CONFIG_TYPES = [
     COLUMN_VALIDATION,
@@ -117,7 +118,11 @@ CONFIG_TYPES = [
     ROW_VALIDATION,
     SCHEMA_VALIDATION,
     CUSTOM_QUERY,
+    CHUNK_HASH_VALIDATION,
 ]
+
+# ChunkHash (pushdown diff) settings block within a validation config
+CHUNK_HASH_SETTINGS = "chunk_hash_settings"
 
 # State Manager Fields
 DEFAULT_ENV_DIRECTORY = "~/.config/google-pso-data-validator/"

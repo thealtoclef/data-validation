@@ -230,6 +230,34 @@ class ConfigManager(object):
             self.custom_query_type + custom_query_type
         )
 
+    def append_chunk_hash_settings(
+        self,
+        primary_keys,
+        comparison_columns=None,
+        bisection_factor=32,
+        num_buckets=16,
+        bisection_threshold=16000,
+        max_depth=8,
+        max_diff_rows=100000,
+        max_parallelism=4,
+    ):
+        """Append chunk-hash (pushdown diff) settings to existing config."""
+        self._config[consts.CONFIG_PRIMARY_KEYS] = primary_keys
+        self._config[consts.CHUNK_HASH_SETTINGS] = {
+            "comparison_columns": list(comparison_columns or []),
+            "bisection_factor": int(bisection_factor),
+            "num_buckets": int(num_buckets),
+            "bisection_threshold": int(bisection_threshold),
+            "max_depth": int(max_depth),
+            "max_diff_rows": int(max_diff_rows),
+            "max_parallelism": int(max_parallelism),
+        }
+
+    @property
+    def chunk_hash_settings(self):
+        """Return chunk-hash settings from Config"""
+        return self._config.get(consts.CHUNK_HASH_SETTINGS) or {}
+
     @property
     def source_query_file(self):
         """Return SQL Query File from Config"""

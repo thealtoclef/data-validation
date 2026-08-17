@@ -100,6 +100,21 @@ class AggregateField(object):
         )
 
     @staticmethod
+    def hash_sum(field_name=None, alias=None, cast=None):
+        """Segment checksum: SUM of hash truncated to last 15 hex chars as exact numeric.
+
+        NB: the compiled SQL must use SUBSTR(<h>, 50) — positive position. Negative
+        offsets return the whole string in PostgreSQL and silently break
+        cross-dialect equality (verified by live spike; see ADR-0003).
+        """
+        return AggregateField(
+            operations.compile_hash_sum,
+            field_name=field_name,
+            alias=alias,
+            cast=cast,
+        )
+
+    @staticmethod
     def std(field_name=None, alias=None, cast=None):
         return AggregateField(
             ibis.expr.types.NumericColumn.std,

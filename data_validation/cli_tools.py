@@ -254,6 +254,10 @@ CONNECTION_SOURCE_FIELDS = {
 VALIDATE_HELP_TEXT = "Run a validation and optionally store to config"
 VALIDATE_COLUMN_HELP_TEXT = "Run a column validation"
 VALIDATE_ROW_HELP_TEXT = "Run a row validation"
+VALIDATE_CHUNK_HASH_HELP_TEXT = (
+    "Run a chunk-hash validation (pushdown table diff: checksum bisection "
+    "with all heavy compute inside the databases)"
+)
 VALIDATE_SCHEMA_HELP_TEXT = "Run a schema validation"
 VALIDATE_CUSTOM_QUERY_HELP_TEXT = "Run a custom query validation"
 
@@ -652,6 +656,91 @@ def _configure_validate_parser(subparsers):
         "custom-query", help=VALIDATE_CUSTOM_QUERY_HELP_TEXT
     )
     _configure_custom_query_parser(custom_query_parser)
+
+    chunk_hash_parser = validate_subparsers.add_parser(
+        "chunk-hash", help=VALIDATE_CHUNK_HASH_HELP_TEXT
+    )
+    _configure_chunk_hash_parser(chunk_hash_parser)
+
+
+def _configure_chunk_hash_parser(chunk_hash_parser):
+    """Configure arguments to run chunk-hash (pushdown diff) validations."""
+
+    # Group optional arguments
+    optional_arguments = chunk_hash_parser.add_argument_group("optional arguments")
+    optional_arguments.add_argument(
+        "--comparison-columns",
+        "-cc",
+        help=(
+            "Comma separated list of columns hashed into the row checksum. "
+            "Default: all columns except the primary keys."
+        ),
+    )
+    optional_arguments.add_argument(
+        "--bisection-factor",
+        type=int,
+        default=32,
+        help="Number of key-range segments per bisection level (default 32).",
+    )
+    optional_arguments.add_argument(
+        "--num-buckets",
+        type=int,
+        default=16,
+        help="Intra-segment hash buckets for finer mismatch localization (default 16).",
+    )
+    optional_arguments.add_argument(
+        "--bisection-threshold",
+        type=int,
+        default=16000,
+        help=(
+            "Row count at which a mismatching segment stops bisecting and is "
+            "downloaded and diffed locally (default 16000)."
+        ),
+    )
+    optional_arguments.add_argument(
+        "--max-depth",
+        type=int,
+        default=8,
+        help="Maximum bisection recursion depth (default 8).",
+    )
+    optional_arguments.add_argument(
+        "--max-diff-rows",
+        type=int,
+        default=100000,
+        help=(
+            "Total downloaded-row budget; when exceeded the run stops with "
+            "status budget_exceeded (default 100000)."
+        ),
+    )
+    optional_arguments.add_argument(
+        "--max-parallelism",
+        type=int,
+        default=4,
+        help=(
+            "Worker threads for independent top-level queries and subranges "
+            "(default 4). Set to 1 to disable parallelism."
+        ),
+    )
+
+    # Group required arguments
+    required_arguments = chunk_hash_parser.add_argument_group("required arguments")
+    required_arguments.add_argument(
+        "--primary-keys",
+        "-pk",
+        required=True,
+        help=(
+            "Comma separated list of primary key columns 'col_a,col_b'; "
+            "key ranges are cut on the first column."
+        ),
+    )
+    required_arguments.add_argument(
+        "--tables-list",
+        "-tbls",
+        default=None,
+        required=True,
+        help="Comma separated tables list in the form 'schema.table=target_schema.target_table'",
+    )
+    _add_common_arguments(optional_arguments, required_arguments)
 
 
 def _configure_row_parser(
@@ -1650,6 +1739,10 @@ def get_pre_build_configs(args: "Namespace", validate_cmd: str) -> List[Dict]:
         config_type = consts.ROW_VALIDATION
     elif validate_cmd == "Custom-query":
         config_type = consts.CUSTOM_QUERY
+    elif validate_cmd in ("ChunkHash", "Chunk-hash"):
+        # "Chunk-hash" arises from args.validate_cmd.capitalize() on the CLI
+        # subcommand name; "ChunkHash" is passed explicitly by callers.
+        config_type = consts.CHUNK_HASH_VALIDATION
     else:
         raise ValueError(f"Unknown Validation Type: {validate_cmd}")
 
