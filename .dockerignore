@@ -1,0 +1,30 @@
+# Deny all, then allowlist back. Keeps the build context minimal and
+# avoids accidentally shipping repo-local state into the image.
+
+# --- Ignore everything ---
+**
+
+# --- Allowlist: Python sources (the package) ---
+!data_validation/
+!third_party/
+
+# --- Allowlist: build configuration ---
+!setup.py
+!setup.cfg
+!README.md
+
+# --- Allowlist: license/attribution ---
+!LICENSE
+
+# --- Deny, even within allowlisted dirs (caches, VCS, junk) ---
+**/__pycache__/
+**/*.py[cod]
+**/.DS_Store
+.git/
+.gitignore
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
