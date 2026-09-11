@@ -94,6 +94,10 @@ CONNECTION_SOURCE_FIELDS = {
             '(Optional) GCP BigQuery API endpoint (e.g. "https://bigquery-mypsc.p.googleapis.com")',
         ],
         [
+            "use_databoost",
+            "Route eligible Spanner queries through Data Boost (ROW VALIDATION ONLY; column validation queries are not root-partitionable; needs spanner.databases.useDataBoost IAM)",
+        ],
+        [
             "storage_api_endpoint",
             '(Optional) GCP BigQuery Storage API endpoint (e.g. "https://bigquerystorage-mypsc.p.googleapis.com")',
         ],
