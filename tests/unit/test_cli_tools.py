@@ -255,6 +255,35 @@ def test_get_connection_config_from_args():
     assert conn["project_id"] == "example-project"
 
 
+def test_get_doris_connection_config_from_args():
+    parser = cli_tools.configure_arg_parser()
+    args = parser.parse_args(
+        [
+            "connections",
+            "add",
+            "--connection-name",
+            "doris",
+            consts.SOURCE_TYPE_DORIS,
+            "--host",
+            "localhost",
+            "--port",
+            "9030",
+            "--user",
+            "root",
+            "--password",
+            "secret",
+            "--database",
+            "ic_gl",
+        ]
+    )
+
+    conn = cli_tools.get_connection_config_from_args(args)
+
+    assert conn[consts.SOURCE_TYPE] == consts.SOURCE_TYPE_DORIS
+    assert conn["port"] == "9030"
+    assert conn["database"] == "ic_gl"
+
+
 def test_store_connection(caplog):
     caplog.set_level(logging.INFO)
     parser = cli_tools.configure_arg_parser()

@@ -153,6 +153,13 @@ CONNECTION_SOURCE_FIELDS = {
         ["ip_type", "IP type: public, private, or psc (default public)"],
         ["enable_iam_auth", "Use IAM database authentication (default False)"],
     ],
+    consts.SOURCE_TYPE_DORIS: [
+        ["host", "Doris host (default localhost)"],
+        ["port", "Doris MySQL protocol port (default 9030)"],
+        ["user", "User used to connect"],
+        ["password", "Password for supplied user"],
+        ["database", "Doris database to connect to"],
+    ],
     consts.SOURCE_TYPE_SNOWFLAKE: [
         ["user", "Username to connect to"],
         ["password", "Password for authentication of user"],

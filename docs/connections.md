@@ -85,6 +85,7 @@ The data validation tool supports the following connection types.
 * [SQL Server](#sql-server)
 * [Postgres](#postgres)
 * [MySQL](#mysql)
+* [Doris](#doris)
 * [Redshift](#redshift)
 * [FileSystem](#filesystem-csv-orc-parquet-or-json-only)
 * [Impala](#impala)
@@ -332,6 +333,20 @@ data-validation connections add
     --user USER                                         MySQL user
     --password PASSWORD                                 MySQL password
     --database DATABASE                                 MySQL database
+```
+
+## Doris
+
+```
+data-validation connections add
+    [--secret-manager-type <None|GCP>]                  Secret Manager type (None, GCP)
+    [--secret-manager-project-id SECRET_PROJECT_ID]     Secret Manager project ID
+    --connection-name CONN_NAME Doris                   Connection name
+    --host HOST                                         Doris host
+    --port PORT                                         Doris MySQL protocol port, defaults to 9030
+    --user USER                                         Doris user
+    --password PASSWORD                                 Doris password
+    --database DATABASE                                 Doris database
 ```
 
 ## Redshift

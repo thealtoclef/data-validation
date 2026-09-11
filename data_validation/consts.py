@@ -146,6 +146,7 @@ SOURCE_TYPE_SYBASE = "Sybase"
 SOURCE_TYPE_TERADATA = "Teradata"
 SOURCE_TYPE_CLOUDSQL_POSTGRES = "CloudSQLPostgres"
 SOURCE_TYPE_CLOUDSQL_MYSQL = "CloudSQLMySQL"
+SOURCE_TYPE_DORIS = "Doris"
 
 # BigQuery Result Handler Configs
 RH_TYPE = "type"

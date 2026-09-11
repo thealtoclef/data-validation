@@ -261,3 +261,7 @@ else:
             exceptions.DataClientConnectionFailure, match=r".*pip install ibm_db_sa"
         ):
             clients.get_data_client(DB2_CONN_CONFIG)
+
+
+def test_doris_connection_reuses_mysql_client():
+    assert clients.CLIENT_LOOKUP[consts.SOURCE_TYPE_DORIS] is clients.ibis.mysql.connect

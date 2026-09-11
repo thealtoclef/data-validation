@@ -30,6 +30,7 @@ DVT supports the following connection types:
 *   [Impala](docs/connections.md#impala)
 *   [MSSQL](docs/connections.md#mssql-server)
 *   [MySQL](docs/connections.md#mysql)
+*   [Doris](docs/connections.md#doris)
 *   [Oracle](docs/connections.md#oracle)
 *   [Postgres](docs/connections.md#postgres)
 *   [Redshift](docs/connections.md#redshift)

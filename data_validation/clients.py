@@ -498,6 +498,7 @@ CLIENT_LOOKUP = {
     consts.SOURCE_TYPE_BIGQUERY: get_bigquery_client,
     consts.SOURCE_TYPE_IMPALA: impala_connect,
     consts.SOURCE_TYPE_MYSQL: ibis.mysql.connect,
+    consts.SOURCE_TYPE_DORIS: ibis.mysql.connect,
     consts.SOURCE_TYPE_ORACLE: oracle_connect,
     consts.SOURCE_TYPE_FILESYSTEM: get_pandas_client,
     consts.SOURCE_TYPE_POSTGRES: ibis.postgres.connect,
