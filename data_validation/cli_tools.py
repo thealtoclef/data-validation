@@ -133,6 +133,22 @@ CONNECTION_SOURCE_FIELDS = {
         ["password", "Password for supplied user"],
         ["database", "Database to connect to (default master)"],
     ],
+    consts.SOURCE_TYPE_CLOUDSQL_POSTGRES: [
+        ["instance_connection_name", "Cloud SQL instance connection name (project:region:instance)"],
+        ["database", "Database to connect to"],
+        ["user", "Database user (or IAM principal email when enable_iam_auth=true)"],
+        ["password", "Password for supplied user (omit for IAM auth)"],
+        ["ip_type", "IP type: public, private, or psc (default public)"],
+        ["enable_iam_auth", "Use IAM database authentication (default False)"],
+    ],
+    consts.SOURCE_TYPE_CLOUDSQL_MYSQL: [
+        ["instance_connection_name", "Cloud SQL instance connection name (project:region:instance)"],
+        ["database", "Database to connect to"],
+        ["user", "Database user (or IAM principal email when enable_iam_auth=true)"],
+        ["password", "Password for supplied user (omit for IAM auth)"],
+        ["ip_type", "IP type: public, private, or psc (default public)"],
+        ["enable_iam_auth", "Use IAM database authentication (default False)"],
+    ],
     consts.SOURCE_TYPE_SNOWFLAKE: [
         ["user", "Username to connect to"],
         ["password", "Password for authentication of user"],

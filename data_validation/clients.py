@@ -30,6 +30,10 @@ from data_validation import client_info, consts, exceptions
 from data_validation.secret_manager import SecretManagerBuilder
 
 from third_party.ibis.ibis_bigquery.api import bigquery_connect
+from third_party.ibis.ibis_cloudsql.api import (
+    cloudsql_mysql_connect,
+    cloudsql_postgres_connect,
+)
 from third_party.ibis.ibis_cloud_spanner.api import spanner_connect
 from third_party.ibis.ibis_impala.api import impala_connect
 from third_party.ibis.ibis_redshift.api import redshift_connect
@@ -502,6 +506,8 @@ CLIENT_LOOKUP = {
     consts.SOURCE_TYPE_MSSQL: mssql_connect,
     consts.SOURCE_TYPE_SNOWFLAKE: snowflake_connect,
     consts.SOURCE_TYPE_SPANNER: spanner_connect,
+    consts.SOURCE_TYPE_CLOUDSQL_POSTGRES: cloudsql_postgres_connect,
+    consts.SOURCE_TYPE_CLOUDSQL_MYSQL: cloudsql_mysql_connect,
     consts.SOURCE_TYPE_SYBASE: sybase_connect,
     consts.SOURCE_TYPE_DB2: db2_connect,
     consts.SOURCE_TYPE_DB2_ZOS: db2_zos_connect,

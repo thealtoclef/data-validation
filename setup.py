@@ -45,6 +45,8 @@ dependencies = [
     "PyYAML>=6.0.2",
     "SQLAlchemy>=2.0.49",  # Fixes warning when using MS SQL 2025
     "tabulate>=0.9.0",
+    "cloud-sql-python-connector>=1.16.0",
+    "pg8000>=1.31.0",
 ]
 
 extras_require = {
